@@ -196,6 +196,8 @@ void initialization(){
 int main(){
   stdio_init_all();
   initialization();
+  srand(time(NULL));
+
     
   for (int j = 0; j <= 24; j++) { 
     float i = 0.9;  
@@ -206,7 +208,7 @@ int main(){
 
   } 
 
-  sleep_ms(5000);
+  //sleep_ms(5000);
   gpio_set_irq_enabled_with_callback(button_A, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
   gpio_set_irq_enabled_with_callback(button_B, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
   add_repeating_timer_ms(3000, timer_callback, NULL, &timer);
@@ -226,24 +228,33 @@ int main(){
     if (chamou) {
       printf("Chamou a função de callback\n");
       //Controle de intensidade
-      srand(time(NULL));
     
-      int lower_margin = 5;
-      int upper_margin = 19;
+      int lower_margin = 0;
+      int upper_margin = 24;
       int range = upper_margin - lower_margin + 1;
     
       int random_number = rand() % range + lower_margin;
       intensity = leds[random_number].intensity_m;
+      int is_red = leds[random_number].R;
+      int is_green = leds[random_number].G;
+      
       printf("Numero escolhido: %d\n", random_number);
-      printf("Itensidade do LED: %d\n", intensity);
-      //npSetLEDIntensity(random_number, 255, 0, 0, 0.01); 
-    
-      if (intensity <= 0.04){
-        npSetLEDIntensity(random_number, 255, 0, 0, intensity - 0.01);  
+      printf("Itensidade do LED: %.2f\n", intensity);
+      float new_intensity = intensity * 0.9;
+      printf("Nova intensidade: %.2f\n", new_intensity);
+
+      if(is_red > 0){
+        printf("é vermelho: %d\n", is_red);
+        sleep_ms(1000);
+      }
+
+      //Sensor de presença
+      if (new_intensity <= 0.1 && is_red == 0){
+        npSetLEDIntensity(random_number, 255, 0, 0, 0.1);  
         printf("Itensidade muito baixa, fica vermelho\n");
-    
-      } else {
-        npSetLEDIntensity(random_number, 0, 255, 0, intensity - 0.01);
+
+      } else if (is_green > 0){
+        npSetLEDIntensity(random_number, 0, 255, 0, new_intensity);
         printf("Tirando 0.01 do LED: %d\n", random_number);  
       }
       printf("Saiu do callback\n");
@@ -253,7 +264,7 @@ int main(){
 
       
     }
-    sleep_ms(100);
+    sleep_ms(200);
     
   }
 
