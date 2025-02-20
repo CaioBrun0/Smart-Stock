@@ -35,6 +35,9 @@ ssd1306_t ssd;
 #define DIGIT_SIZE 5
 #define LED_COUNT 25
 #define PIN_MATRIZ 7
+int led_index = 1;
+uint8_t red = 0 , green = 255, blue = 0;
+float intensity = 1.0;  // Brilho inicial
 
 //Variaveis para tratar os botões
 const uint32_t debounce_time_ms = 200;
@@ -99,6 +102,25 @@ void npSetLEDIntensity(uint index, uint8_t r, uint8_t g, uint8_t b, float intens
     /* ================================ (FIM) MATRIZ =================================*/
 
 
+//Função de interrupção
+void gpio_irq_handler(uint gpio, uint32_t events) {
+  absolute_time_t now = get_absolute_time();
+  if (absolute_time_diff_us(last_interrupt_time, now) < debounce_time_ms * 1000)
+      return;
+
+  last_interrupt_time = now;
+  if (gpio == button_A){
+      office_hours = true;
+      not_office_hours = false;
+
+  }else if (gpio == button_B){
+      office_hours = false;
+      not_office_hours = true;
+  }
+}
+
+
+
 //Inicializa os pinos
 void initialization(){
     //Joystick
@@ -152,47 +174,29 @@ void initialization(){
     //Matriz
     npInit(PIN_MATRIZ);
 
-
 }
 
 int main(){
     stdio_init_all();
     initialization();
 
-    int led_index = 1;
-    uint8_t red = 0 , green = 255, blue = 0;
-    float intensity = 1.0;  // Brilho inicial
+    gpio_set_irq_enabled_with_callback(button_A, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
+    gpio_set_irq_enabled_with_callback(button_B, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
 
     while (true) {
 
       if (office_hours){
+        func_office_hours();
 
-
-        
       } 
       
-      
-      
       else if (not_office_hours){
-
+        func_not_office_hours();
       }
 
       sleep_ms(100);
       
-
-
-
-
-
     }
-
-
-
-
-
-
-
-
 
     //Controle de intensidade
     for (int i = 0; i <= 10; i++) {
@@ -208,4 +212,13 @@ int main(){
       npWrite();
       sleep_ms(200);
   }
+}
+
+void func_office_hours(){
+
+
+}
+
+void func_not_office_hours(){
+
 }
