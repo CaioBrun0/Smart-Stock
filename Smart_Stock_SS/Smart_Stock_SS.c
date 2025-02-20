@@ -38,98 +38,66 @@ ssd1306_t ssd;
 
 //Variaveis para tratar os botões
 const uint32_t debounce_time_ms = 200;
-volatile bool button_a_pressed = false;
-volatile bool button_b_pressed = false;
+volatile bool office_hours = true;
+volatile bool not_office_hours = false;
 absolute_time_t last_interrupt_time = 0;
 
-// Definição de pixel GRB
+/* ================================ (inicio) MATRIZ =================================*/
+
 struct pixel_t {
-    uint8_t G, R, B; // Três valores de 8-bits compõem um pixel.
-  };
-  typedef struct pixel_t pixel_t;
-  typedef pixel_t npLED_t; // Mudança de nome de "struct pixel_t" para "npLED_t" por clareza.
-  
-  // Declaração do buffer de pixels que formam a matriz.
-  npLED_t leds[LED_COUNT];
-  
-  // Variáveis para uso da máquina PIO.
-  PIO np_pio;
-  uint sm;
-  
-  /**
-   * Inicializa a máquina PIO para controle da matriz de LEDs.
-   */
-  void npInit(uint pin) {
-  
-    // Cria programa PIO.
-    uint offset = pio_add_program(pio0, &ws2818b_program);
-    np_pio = pio0;
-  
-    // Toma posse de uma máquina PIO.
-    sm = pio_claim_unused_sm(np_pio, false);
-    if (sm < 0) {
+  uint8_t G, R, B;
+};
+typedef struct pixel_t pixel_t;
+typedef pixel_t npLED_t;
+
+npLED_t leds[LED_COUNT];
+
+PIO np_pio;
+uint sm;
+
+void npInit(uint pin) {
+  uint offset = pio_add_program(pio0, &ws2818b_program);
+  np_pio = pio0;
+  sm = pio_claim_unused_sm(np_pio, false);
+  if (sm < 0) {
       np_pio = pio1;
-      sm = pio_claim_unused_sm(np_pio, true); // Se nenhuma máquina estiver livre, panic!
-    }
-  
-    // Inicia programa na máquina PIO obtida.
-    ws2818b_program_init(np_pio, sm, offset, pin, 800000.f);
-  
-    // Limpa buffer de pixels.
-    for (uint i = 0; i < LED_COUNT; ++i) {
+      sm = pio_claim_unused_sm(np_pio, true);
+  }
+  ws2818b_program_init(np_pio, sm, offset, pin, 800000.f);
+  for (uint i = 0; i < LED_COUNT; ++i) {
       leds[i].R = 0;
       leds[i].G = 0;
       leds[i].B = 0;
-    }
   }
-  
-  
-  void npSetLED(const uint index, const uint8_t r, const uint8_t g, const uint8_t b) {
-    leds[index].R = r;
-    leds[index].G = g;
-    leds[index].B = b;
-  }
-  
-  //Limpa o buffer
-  void npClear() {
-    for (uint i = 0; i < LED_COUNT; ++i)
-      npSetLED(i, 0, 0, 0);
-  }
-  
-  //Escreve os dados no buffer
-  void npWrite() {
-    // Escreve cada dado de 8-bits dos pixels em sequência no buffer da máquina PIO.
-    for (uint i = 0; i < LED_COUNT; ++i) {
+}
+
+void npSetLED(const uint index, const uint8_t r, const uint8_t g, const uint8_t b) {
+  leds[index].R = r;
+  leds[index].G = g;
+  leds[index].B = b;
+}
+
+void npWrite() {
+  for (uint i = 0; i < LED_COUNT; ++i) {
       pio_sm_put_blocking(np_pio, sm, leds[i].G);
       pio_sm_put_blocking(np_pio, sm, leds[i].R);
       pio_sm_put_blocking(np_pio, sm, leds[i].B);
-    }
-    sleep_us(100); // Espera 100us, sinal de RESET do datasheet.
   }
-  
-  // Função para converter a posição do matriz para uma posição do vetor.
-  int getIndex(int x, int y) {
-      if (y % 2 == 0) {
-          return 24-(y * 5 + x); 
-      } else {
-          return 24-(y * 5 + (4 - x)); 
-      }
-  }
-  
-  // Atualizar os LEDs com os valores ajustados
-  void brightness(int matriz[5][5][3]){
-  
-      // Atualizar os LEDs com os valores ajustados
-      for (int linha = 0; linha < 5; linha++) {
-          for (int coluna = 0; coluna < 5; coluna++) {
-              int posicao = getIndex(linha, coluna);
-              npSetLED(posicao, matriz[coluna][linha][0], matriz[coluna][linha][1], matriz[coluna][linha][2]);
-          }
-      }
-  
-      npWrite();
-  
-    }  
+  sleep_us(100);
+}
+
+void npSetLEDIntensity(uint index, uint8_t r, uint8_t g, uint8_t b, float intensity) {
+  if (intensity < 0) intensity = 0;
+  if (intensity > 1) intensity = 1;
+
+  leds[index].R = (uint8_t)(r * intensity);
+  leds[index].G = (uint8_t)(g * intensity);
+  leds[index].B = (uint8_t)(b * intensity);
+}
+
+
+    /* ================================ (FIM) MATRIZ =================================*/
+
 
 //Inicializa os pinos
 void initialization(){
@@ -181,15 +149,63 @@ void initialization(){
     ssd1306_config(&ssd); // Configura o display
     ssd1306_send_data(&ssd); // Envia os dados para o display
 
+    //Matriz
+    npInit(PIN_MATRIZ);
+
+
 }
 
-int main()
-{
+int main(){
     stdio_init_all();
     initialization();
 
+    int led_index = 1;
+    uint8_t red = 0 , green = 255, blue = 0;
+    float intensity = 1.0;  // Brilho inicial
+
     while (true) {
 
-        sleep_ms(1000);
+      if (office_hours){
+
+
+        
+      } 
+      
+      
+      
+      else if (not_office_hours){
+
+      }
+
+      sleep_ms(100);
+      
+
+
+
+
+
     }
+
+
+
+
+
+
+
+
+
+    //Controle de intensidade
+    for (int i = 0; i <= 10; i++) {
+      intensity = i / 10.0; // Varia o brilho entre 0.0 e 1.0
+      npSetLEDIntensity(led_index, red, green, blue, intensity);
+      npWrite();
+      sleep_ms(200);
+  }
+
+  for (int i = 10; i >= 0; i--) {
+      intensity = i / 10.0;
+      npSetLEDIntensity(led_index, red, green, blue, intensity);
+      npWrite();
+      sleep_ms(200);
+  }
 }
