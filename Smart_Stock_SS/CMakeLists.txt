@@ -60,7 +60,7 @@ target_include_directories(Smart_Stock_SS PRIVATE
 target_link_libraries(Smart_Stock_SS 
         hardware_adc
         hardware_pio
-        hardware_pwm
+        hardware_timer
         hardware_i2c
         )
 

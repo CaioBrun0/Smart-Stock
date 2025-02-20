@@ -1,9 +1,11 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 #include "pico/stdlib.h"
 #include "pico/stdlib.h"
 #include "hardware/adc.h"     
-#include "hardware/pwm.h"   
 #include "hardware/i2c.h"   
+#include "hardware/timer.h"
 #include "ws2818b.pio.h"
 #include "lib/ssd1306.h"   
 #include "lib/font.h"
@@ -35,7 +37,7 @@ ssd1306_t ssd;
 #define DIGIT_SIZE 5
 #define LED_COUNT 25
 #define PIN_MATRIZ 7
-int led_index = 1;
+int led_index = 0;
 uint8_t red = 0 , green = 255, blue = 0;
 float intensity = 1.0;  // Brilho inicial
 
@@ -44,11 +46,16 @@ const uint32_t debounce_time_ms = 200;
 volatile bool office_hours = true;
 volatile bool not_office_hours = false;
 absolute_time_t last_interrupt_time = 0;
+struct repeating_timer timer;
+
+volatile bool chamou = false;
+
 
 /* ================================ (inicio) MATRIZ =================================*/
 
 struct pixel_t {
   uint8_t G, R, B;
+  float intensity_m;
 };
 typedef struct pixel_t pixel_t;
 typedef pixel_t npLED_t;
@@ -96,6 +103,8 @@ void npSetLEDIntensity(uint index, uint8_t r, uint8_t g, uint8_t b, float intens
   leds[index].R = (uint8_t)(r * intensity);
   leds[index].G = (uint8_t)(g * intensity);
   leds[index].B = (uint8_t)(b * intensity);
+  leds[index].intensity_m = intensity;
+
 }
 
 
@@ -117,6 +126,14 @@ void gpio_irq_handler(uint gpio, uint32_t events) {
       office_hours = false;
       not_office_hours = true;
   }
+}
+
+bool timer_callback(){
+  chamou = true;
+
+  return true;
+
+  
 }
 
 
@@ -177,45 +194,73 @@ void initialization(){
 }
 
 int main(){
-    stdio_init_all();
-    initialization();
+  stdio_init_all();
+  initialization();
+    
+  for (int j = 0; j <= 24; j++) { 
+    float i = 0.9;  
+    float intensity = (float)i / 10.0; // Corrigido para conversão explícita
+    npSetLEDIntensity(j, 0, 255, 0, intensity);  
+    npWrite();  
+    sleep_ms(50);  
 
-    gpio_set_irq_enabled_with_callback(button_A, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
-    gpio_set_irq_enabled_with_callback(button_B, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
+  } 
 
-    while (true) {
+  sleep_ms(5000);
+  gpio_set_irq_enabled_with_callback(button_A, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
+  gpio_set_irq_enabled_with_callback(button_B, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
+  add_repeating_timer_ms(3000, timer_callback, NULL, &timer);
 
-      if (office_hours){
-        func_office_hours();
+  while (true) {
 
-      } 
+    if (office_hours){
       
-      else if (not_office_hours){
-        func_not_office_hours();
-      }
+      //func_office_hours();
 
-      sleep_ms(100);
-      
+    } 
+    
+    else if (not_office_hours){
+      //func_not_office_hours();
     }
 
-    //Controle de intensidade
-    for (int i = 0; i <= 10; i++) {
-      intensity = i / 10.0; // Varia o brilho entre 0.0 e 1.0
-      npSetLEDIntensity(led_index, red, green, blue, intensity);
+    if (chamou) {
+      printf("Chamou a função de callback\n");
+      //Controle de intensidade
+      srand(time(NULL));
+    
+      int lower_margin = 5;
+      int upper_margin = 19;
+      int range = upper_margin - lower_margin + 1;
+    
+      int random_number = rand() % range + lower_margin;
+      intensity = leds[random_number].intensity_m;
+      printf("Numero escolhido: %d\n", random_number);
+      printf("Itensidade do LED: %d\n", intensity);
+      //npSetLEDIntensity(random_number, 255, 0, 0, 0.01); 
+    
+      if (intensity <= 0.04){
+        npSetLEDIntensity(random_number, 255, 0, 0, intensity - 0.01);  
+        printf("Itensidade muito baixa, fica vermelho\n");
+    
+      } else {
+        npSetLEDIntensity(random_number, 0, 255, 0, intensity - 0.01);
+        printf("Tirando 0.01 do LED: %d\n", random_number);  
+      }
+      printf("Saiu do callback\n");
+      printf("\n");
       npWrite();
-      sleep_ms(200);
+      chamou = false;
+
+      
+    }
+    sleep_ms(100);
+    
   }
 
-  for (int i = 10; i >= 0; i--) {
-      intensity = i / 10.0;
-      npSetLEDIntensity(led_index, red, green, blue, intensity);
-      npWrite();
-      sleep_ms(200);
-  }
 }
 
-void func_office_hours(){
 
+void func_office_hours(){
 
 }
 
