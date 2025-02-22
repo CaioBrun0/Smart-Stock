@@ -310,7 +310,8 @@ int main(){
       int lower_margin = 0;
       int upper_margin = 24;
       int range = upper_margin - lower_margin + 1;
-    
+      
+      //Escolhe um estoque de forma aleatoria 
       int random_number = rand() % range + lower_margin;
       intensity = leds[random_number].intensity_m;
       int is_red = leds[random_number].R;
@@ -329,7 +330,17 @@ int main(){
   
         //Sensor de presença
         if (new_intensity <= 0.1 && is_red == 0){
-          npSetLEDIntensity(random_number, 255, 0, 0, 0.1);  
+          npSetLEDIntensity(random_number, 255, 0, 0, 0.1); 
+          
+          //Aviso que está em estado critico
+          char buffer[32]; // Buffer para armazenar a string formatada
+          sprintf(buffer, "ESTOQUE %d", random_number);
+          ssd1306_fill(&ssd, false);
+          ssd1306_draw_string(&ssd, "ESTADO CRITICO", 10, 10); // Desenha uma string
+          ssd1306_draw_string(&ssd, buffer, 30, 30); // Desenha uma string
+          ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor); // Desenha um retângulo
+          ssd1306_draw_string(&ssd, "FACA REPOSICAO", 10, 50); // Desenha uma string
+          ssd1306_send_data(&ssd); // Envia os dados para o display
           printf("Itensidade muito baixa, fica vermelho\n");
   
         } else if (is_green > 0){
