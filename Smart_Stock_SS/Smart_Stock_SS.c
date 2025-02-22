@@ -49,7 +49,12 @@ absolute_time_t last_interrupt_time = 0;
 struct repeating_timer timer;
 
 volatile bool chamou = false;
+bool cor = true;
 
+uint8_t original_R[LED_COUNT];
+uint8_t original_G[LED_COUNT];
+uint8_t original_B[LED_COUNT];
+float original_intensity[LED_COUNT];
 
 /* ================================ (inicio) MATRIZ =================================*/
 
@@ -111,6 +116,8 @@ void npSetLEDIntensity(uint index, uint8_t r, uint8_t g, uint8_t b, float intens
     /* ================================ (FIM) MATRIZ =================================*/
 
 
+    /* ================================ (INICIO) INTERRUPÇÕES =================================*/
+
 //Função de interrupção
 void gpio_irq_handler(uint gpio, uint32_t events) {
   absolute_time_t now = get_absolute_time();
@@ -135,6 +142,65 @@ bool timer_callback(){
 
   
 }
+    /* ================================ (FIM) INTERRUPÇÕES =================================*/
+
+
+
+int calculate_index(int linha, int coluna) {
+  if (linha % 2 == 0) {
+      return linha * 5 + (4 - coluna); // Linhas pares (invertidas)
+  } else {
+      return linha * 5 + coluna; // Linhas ímpares (normais)
+  }
+}
+
+void move_led() {
+  adc_select_input(1);
+  uint16_t x = adc_read();  // VRX
+  adc_select_input(0);
+  uint16_t y = adc_read();  // VRY
+
+  static int line = 2, colum = 2; // Começa no LED 12
+  int new_line = line;
+  int new_colum = colum;
+
+  if (x < 1800 && colum > 0) new_colum--;  // Esquerda
+  if (x > 2200 && colum < 4) new_colum++;  // Direita
+  if (y < 1800 && line > 0) new_line--;    // Cima
+  if (y > 2200 && line < 4) new_line++;    // Baixo
+
+  if (new_line != line || new_colum != colum) {
+      int new_led = calculate_index(new_line, new_colum);
+      int current_led = calculate_index(line, colum);
+
+      // Restaurar a cor original antes de alterar para branco
+      npSetLEDIntensity(current_led, original_R[current_led], original_G[current_led], original_B[current_led], original_intensity[current_led]);
+      printf("Salvando cor original do LED %d: R=%d, G=%d, B=%d, Intensity=%.2f\n", 
+        new_led, leds[new_led].R, leds[new_led].G, leds[new_led].B, leds[new_led].intensity_m);
+      
+     
+
+      // Salvar a cor original do novo LED antes de alterá-lo
+      if (original_intensity[new_led] == 0.0){
+        original_R[new_led] = leds[new_led].R;
+        original_G[new_led] = leds[new_led].G;
+        original_B[new_led] = leds[new_led].B;
+        original_intensity[new_led] = leds[new_led].intensity_m;
+      }
+
+      // Alterar novo LED para branco
+      npSetLEDIntensity(new_led, 255, 255, 255, 0.5);
+      printf("Restaurando LED %d: R=%d, G=%d, B=%d, Intensity=%.2f\n", 
+        current_led, original_R[current_led], original_G[current_led], original_B[current_led], original_intensity[current_led]);
+   
+
+      npWrite();
+
+      line = new_line;
+      colum = new_colum;
+  }
+}
+
 
 
 
@@ -198,15 +264,27 @@ int main(){
   initialization();
   srand(time(NULL));
 
+  // Limpa o display. O display inicia com todos os pixels apagados.
+  ssd1306_fill(&ssd, false);
+  ssd1306_send_data(&ssd);
+  ssd1306_draw_string(&ssd, "BEM VINDO AO", 18, 20); // Desenha uma string
+  ssd1306_draw_string(&ssd, "SMART STOCK", 21, 40); // Desenha uma string
+  ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor); // Desenha um retângulo
+  ssd1306_send_data(&ssd); // Atualiza o display
+
     
   for (int j = 0; j <= 24; j++) { 
-    float i = 0.9;  
-    float intensity = (float)i / 10.0; // Corrigido para conversão explícita
-    npSetLEDIntensity(j, 0, 255, 0, intensity);  
-    npWrite();  
-    sleep_ms(50);  
-
+    if(j != 12){
+      float i = 0.9;  
+      float intensity = (float)i / 10.0; // Corrigido para conversão explícita
+      npSetLEDIntensity(j, 0, 255, 0, intensity);  
+      npWrite();  
+      sleep_ms(50);
+    } else {
+      npSetLEDIntensity(12, 255, 255, 255, 0.09);
+    }
   } 
+
 
   //sleep_ms(5000);
   gpio_set_irq_enabled_with_callback(button_A, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
@@ -214,10 +292,10 @@ int main(){
   add_repeating_timer_ms(3000, timer_callback, NULL, &timer);
 
   while (true) {
+    
 
     if (office_hours){
-      
-      //func_office_hours();
+      move_led();
 
     } 
     
@@ -243,23 +321,27 @@ int main(){
       float new_intensity = intensity * 0.9;
       printf("Nova intensidade: %.2f\n", new_intensity);
 
-      if(is_red > 0){
-        printf("é vermelho: %d\n", is_red);
-        sleep_ms(1000);
+      if (random_number != 12){
+        if(is_red > 0){
+          printf("é vermelho: %d\n", is_red);
+          sleep_ms(1000);
+        }
+  
+        //Sensor de presença
+        if (new_intensity <= 0.1 && is_red == 0){
+          npSetLEDIntensity(random_number, 255, 0, 0, 0.1);  
+          printf("Itensidade muito baixa, fica vermelho\n");
+  
+        } else if (is_green > 0){
+          npSetLEDIntensity(random_number, 0, 255, 0, new_intensity);
+          printf("Tirando 0.01 do LED: %d\n", random_number);  
+        }
+        printf("Saiu do callback\n");
+        printf("\n");
+        npWrite();
+
       }
 
-      //Sensor de presença
-      if (new_intensity <= 0.1 && is_red == 0){
-        npSetLEDIntensity(random_number, 255, 0, 0, 0.1);  
-        printf("Itensidade muito baixa, fica vermelho\n");
-
-      } else if (is_green > 0){
-        npSetLEDIntensity(random_number, 0, 255, 0, new_intensity);
-        printf("Tirando 0.01 do LED: %d\n", random_number);  
-      }
-      printf("Saiu do callback\n");
-      printf("\n");
-      npWrite();
       chamou = false;
 
       
@@ -269,6 +351,8 @@ int main(){
   }
 
 }
+
+
 
 
 void func_office_hours(){
