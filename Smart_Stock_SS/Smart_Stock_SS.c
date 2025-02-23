@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include "pico/stdlib.h"
 #include "pico/stdlib.h"
@@ -50,6 +51,7 @@ struct repeating_timer timer;
 
 volatile bool chamou = false;
 bool cor = true;
+bool get_reposition = false;
 
 uint8_t original_R[LED_COUNT];
 uint8_t original_G[LED_COUNT];
@@ -127,6 +129,7 @@ void gpio_irq_handler(uint gpio, uint32_t events) {
   last_interrupt_time = now;
   if (gpio == button_A){
       office_hours = true;
+      get_reposition = true;
       not_office_hours = false;
 
   }else if (gpio == button_B){
@@ -177,7 +180,6 @@ void move_led() {
       npSetLEDIntensity(current_led, original_R[current_led], original_G[current_led], original_B[current_led], original_intensity[current_led]);
       printf("Salvando cor original do LED %d: R=%d, G=%d, B=%d, Intensity=%.2f\n", 
         new_led, leds[new_led].R, leds[new_led].G, leds[new_led].B, leds[new_led].intensity_m);
-      
      
 
       // Salvar a cor original do novo LED antes de alterá-lo
@@ -192,7 +194,6 @@ void move_led() {
       npSetLEDIntensity(new_led, 255, 255, 255, 0.5);
       printf("Restaurando LED %d: R=%d, G=%d, B=%d, Intensity=%.2f\n", 
         current_led, original_R[current_led], original_G[current_led], original_B[current_led], original_intensity[current_led]);
-   
 
       npWrite();
 
@@ -201,6 +202,57 @@ void move_led() {
   }
 }
 
+void reposition(){
+  //Chama quando o precisa repor um estoque
+  ssd1306_fill(&ssd, false);
+  ssd1306_draw_string(&ssd, "INTEREJA NO", 20, 10); // Desenha uma string
+  ssd1306_draw_string(&ssd, "MONITOR E", 30, 30); // Desenha uma string
+  ssd1306_draw_string(&ssd, "TECLADO", 35, 50); // Desenha uma string
+  ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor); // Desenha um retângulo
+  ssd1306_send_data(&ssd); // Envia os dados para o display
+
+  printf("=====================================\n");
+  printf("[240, 230, 220, 210, 200]\n[150, 160, 170, 180, 190]\n[140, 130, 120, 110, 100]\n[050, 060, 070, 080, 090]\n[040, 030, 020, 010, 000]\n");
+  printf("=====================================\n");
+  printf("Digite o número do deposito que você quer abastecer: \n");
+
+ 
+  char str[3];  // Tamanho 3 para armazenar 2 caracteres e o caractere nulo
+  int i = 0;
+  char ch;
+
+  while ((ch = getchar()) != '\n' && i < 2) {  // i < 2 para armazenar apenas 2 caracteres
+      str[i++] = ch;
+  }
+  str[i] = '\0';  // Adiciona o caractere nulo no final para terminar a string
+
+
+  if(atoi(str) < 0 || atoi(str) > 24){
+    ssd1306_fill(&ssd, false);
+    ssd1306_draw_string(&ssd, "ESTOQUE FORA", 17, 10); // Desenha uma string
+    ssd1306_draw_string(&ssd, "DO SISTEMA", 24, 30); // Desenha uma string
+    ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor); // Desenha um retângulo
+    ssd1306_send_data(&ssd); // Envia os dados para o display
+  }else{
+    npSetLEDIntensity(atoi(str), 0, 255, 0, 0.9);  
+    npWrite();
+
+    char buffer[32]; // Buffer para armazenar a string formatada
+    sprintf(buffer, "ESTOQUE %d", atoi(str));
+    ssd1306_fill(&ssd, false);
+    //ssd1306_draw_string(&ssd, "ESTADO RECUPERADO", 10, 10); // Desenha uma string
+    ssd1306_draw_string(&ssd, buffer, 28, 30); // Desenha uma string
+    ssd1306_draw_string(&ssd, "CHEIO", 45, 46); // Desenha uma string
+    ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor); // Desenha um retângulo
+    ssd1306_send_data(&ssd); // Envia os dados para o display
+
+  }
+
+
+   
+  
+
+}
 
 
 
@@ -297,14 +349,18 @@ int main(){
     if (office_hours){
       move_led();
 
-    } 
+      if(get_reposition && stdio_usb_connected()){
+        reposition();
+      }
+      get_reposition = false;
+
+    }
     
     else if (not_office_hours){
-      //func_not_office_hours();
+
     }
 
     if (chamou) {
-      printf("Chamou a função de callback\n");
       //Controle de intensidade
     
       int lower_margin = 0;
@@ -317,37 +373,37 @@ int main(){
       int is_red = leds[random_number].R;
       int is_green = leds[random_number].G;
       
-      printf("Numero escolhido: %d\n", random_number);
-      printf("Itensidade do LED: %.2f\n", intensity);
+      //printf("Numero escolhido: %d\n", random_number);
+      //printf("Itensidade do LED: %.2f\n", intensity);
       float new_intensity = intensity * 0.9;
       printf("Nova intensidade: %.2f\n", new_intensity);
 
       if (random_number != 12){
         if(is_red > 0){
-          printf("é vermelho: %d\n", is_red);
+          //printf("é vermelho: %d\n", is_red);
           sleep_ms(1000);
         }
   
-        //Sensor de presença
-        if (new_intensity <= 0.1 && is_red == 0){
-          npSetLEDIntensity(random_number, 255, 0, 0, 0.1); 
-          
-          //Aviso que está em estado critico
-          char buffer[32]; // Buffer para armazenar a string formatada
-          sprintf(buffer, "ESTOQUE %d", random_number);
-          ssd1306_fill(&ssd, false);
-          ssd1306_draw_string(&ssd, "ESTADO CRITICO", 10, 10); // Desenha uma string
-          ssd1306_draw_string(&ssd, buffer, 30, 30); // Desenha uma string
-          ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor); // Desenha um retângulo
-          ssd1306_draw_string(&ssd, "FACA REPOSICAO", 10, 50); // Desenha uma string
-          ssd1306_send_data(&ssd); // Envia os dados para o display
-          printf("Itensidade muito baixa, fica vermelho\n");
+      //Sensor de presença
+      if (new_intensity <= 0.07 && is_red == 0){
+        npSetLEDIntensity(random_number, 255, 0, 0, 0.1); 
+        
+        //Aviso que está em estado critico
+        char buffer[32]; // Buffer para armazenar a string formatada
+        sprintf(buffer, "ESTOQUE %d", random_number);
+        ssd1306_fill(&ssd, false);
+        ssd1306_draw_string(&ssd, "ESTADO CRITICO", 10, 10); // Desenha uma string
+        ssd1306_draw_string(&ssd, buffer, 30, 30); // Desenha uma string
+        ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor); // Desenha um retângulo
+        ssd1306_draw_string(&ssd, "FACA REPOSICAO", 10, 50); // Desenha uma string
+        ssd1306_send_data(&ssd); // Envia os dados para o display
+        //printf("Itensidade muito baixa, fica vermelho\n");
   
         } else if (is_green > 0){
           npSetLEDIntensity(random_number, 0, 255, 0, new_intensity);
-          printf("Tirando 0.01 do LED: %d\n", random_number);  
+          //printf("Tirando 0.01 do LED: %d\n", random_number);  
         }
-        printf("Saiu do callback\n");
+        //printf("Saiu do callback\n");
         printf("\n");
         npWrite();
 
@@ -366,9 +422,7 @@ int main(){
 
 
 
-void func_office_hours(){
 
-}
 
 void func_not_office_hours(){
 
