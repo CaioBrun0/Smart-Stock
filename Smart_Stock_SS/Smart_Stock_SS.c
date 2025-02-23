@@ -148,7 +148,6 @@ bool timer_callback(){
     /* ================================ (FIM) INTERRUPÇÕES =================================*/
 
 
-
 int calculate_index(int linha, int coluna) {
   if (linha % 2 == 0) {
       return linha * 5 + (4 - coluna); // Linhas pares (invertidas)
@@ -177,18 +176,31 @@ void move_led() {
       int current_led = calculate_index(line, colum);
 
       // Restaurar a cor original antes de alterar para branco
-      npSetLEDIntensity(current_led, original_R[current_led], original_G[current_led], original_B[current_led], original_intensity[current_led]);
+      npSetLEDIntensity(current_led, original_R[current_led], original_G[current_led], original_B[current_led], 1);
       printf("Salvando cor original do LED %d: R=%d, G=%d, B=%d, Intensity=%.2f\n", 
         new_led, leds[new_led].R, leds[new_led].G, leds[new_led].B, leds[new_led].intensity_m);
      
 
       // Salvar a cor original do novo LED antes de alterá-lo
-      if (original_intensity[new_led] == 0.0){
-        original_R[new_led] = leds[new_led].R;
-        original_G[new_led] = leds[new_led].G;
-        original_B[new_led] = leds[new_led].B;
-        original_intensity[new_led] = leds[new_led].intensity_m;
-      }
+      original_R[new_led] = leds[new_led].R;
+      original_G[new_led] = leds[new_led].G;
+      original_B[new_led] = leds[new_led].B;
+      original_intensity[new_led] = leds[new_led].intensity_m;
+      printf("Salvando cor original do LED %d: R=%d, G=%d, B=%d, Intensity=%.2f\n", 
+        new_led, original_R[new_led], original_G[new_led], original_B[new_led], original_intensity[new_led]);
+      
+      ssd1306_fill(&ssd, false);
+      char buffer[32]; // Buffer para armazenar a string formatada
+      char nivel[32];
+      sprintf(buffer, "ESTOQUE %d", new_led);
+      sprintf(nivel, "NIVEL %.1f DE", original_intensity[new_led]*100);
+      ssd1306_draw_string(&ssd, buffer, 20, 10); // Desenha uma string
+      ssd1306_draw_string(&ssd, nivel, 10, 30); // Desenha uma string
+      ssd1306_draw_string(&ssd, "CAPACIDADE", 25, 50); // Desenha uma string
+      ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor); // Desenha um retângulo
+      ssd1306_send_data(&ssd); // Envia os dados para o display
+      
+    
 
       // Alterar novo LED para branco
       npSetLEDIntensity(new_led, 255, 255, 255, 0.5);
@@ -247,10 +259,6 @@ void reposition(){
     ssd1306_send_data(&ssd); // Envia os dados para o display
 
   }
-
-
-   
-  
 
 }
 
@@ -341,7 +349,7 @@ int main(){
   //sleep_ms(5000);
   gpio_set_irq_enabled_with_callback(button_A, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
   gpio_set_irq_enabled_with_callback(button_B, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
-  add_repeating_timer_ms(3000, timer_callback, NULL, &timer);
+  add_repeating_timer_ms(1000, timer_callback, NULL, &timer);
 
   while (true) {
     
@@ -367,7 +375,7 @@ int main(){
       int upper_margin = 24;
       int range = upper_margin - lower_margin + 1;
       
-      //Escolhe um estoque de forma aleatoria 
+      //Escolhe um estoque de forma aleatoria para simulação
       int random_number = rand() % range + lower_margin;
       intensity = leds[random_number].intensity_m;
       int is_red = leds[random_number].R;
@@ -384,9 +392,9 @@ int main(){
           sleep_ms(1000);
         }
   
-      //Sensor de presença
+      //Sensor de retirada de produto
       if (new_intensity <= 0.07 && is_red == 0){
-        npSetLEDIntensity(random_number, 255, 0, 0, 0.1); 
+        npSetLEDIntensity(random_number, 255, 0, 0, 0.05); 
         
         //Aviso que está em estado critico
         char buffer[32]; // Buffer para armazenar a string formatada
@@ -421,9 +429,3 @@ int main(){
 
 
 
-
-
-
-void func_not_office_hours(){
-
-}
