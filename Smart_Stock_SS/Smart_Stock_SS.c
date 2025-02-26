@@ -12,40 +12,33 @@
 #include "lib/font.h"
 
 //Pins
-#define button_A 5
-#define button_B 6
-#define buzzer_A 21
-#define buzzer_B 10
-#define VRX 26
-#define VRY 27
-#define LED_r 13
-#define LED_g 11
-#define LED_b 12
+#define button_A 5 //Botão A
+#define VRX 26 // Pino do eixo X do joystick
+#define VRY 27 // Pino do eixo Y do joystick
 
 //Display
 #define I2C_PORT i2c1 
 #define I2C_SDA 14
 #define I2C_SCL 15
 #define endereco 0x3c
-uint pwm_wrap = 4096;
 
 ssd1306_t ssd;
 #define WIDTH 128 
 #define HEIGHT 64 
-#define SQUARE_SIZE 8
 
 //Matriz
 #define DIGIT_SIZE 5
 #define LED_COUNT 25
 #define PIN_MATRIZ 7
+
 int led_index = 0;
+uint pwm_wrap = 4096;
 uint8_t red = 0 , green = 255, blue = 0;
 float intensity = 1.0;  // Brilho inicial
 
-//Variaveis para tratar os botões
+//Variaveis para tratar os botões (debounce)
 const uint32_t debounce_time_ms = 200;
 volatile bool office_hours = true;
-volatile bool not_office_hours = false;
 absolute_time_t last_interrupt_time = 0;
 struct repeating_timer timer;
 
@@ -53,6 +46,7 @@ volatile bool chamou = false;
 bool cor = true;
 bool get_reposition = false;
 
+//Para guardar as informações atuais do LED antes de mudar para branco
 uint8_t original_R[LED_COUNT];
 uint8_t original_G[LED_COUNT];
 uint8_t original_B[LED_COUNT];
@@ -118,7 +112,6 @@ void npSetLEDIntensity(uint index, uint8_t r, uint8_t g, uint8_t b, float intens
     /* ================================ (FIM) MATRIZ =================================*/
 
 
-    /* ================================ (INICIO) INTERRUPÇÕES =================================*/
 
 //Função de interrupção
 void gpio_irq_handler(uint gpio, uint32_t events) {
@@ -127,27 +120,17 @@ void gpio_irq_handler(uint gpio, uint32_t events) {
       return;
 
   last_interrupt_time = now;
-  if (gpio == button_A){
-      office_hours = true;
-      get_reposition = true;
-      not_office_hours = false;
+  office_hours = true;
+  get_reposition = true;
 
-  }else if (gpio == button_B){
-      office_hours = false;
-      not_office_hours = true;
-  }
 }
 
 bool timer_callback(){
   chamou = true;
-
   return true;
-
-  
 }
-    /* ================================ (FIM) INTERRUPÇÕES =================================*/
 
-
+//Caclculo o indice do novo LED
 int calculate_index(int linha, int coluna) {
   if (linha % 2 == 0) {
       return linha * 5 + (4 - coluna); // Linhas pares (invertidas)
@@ -156,6 +139,7 @@ int calculate_index(int linha, int coluna) {
   }
 }
 
+//Movimenta o LED branco de acordo com o joystick
 void move_led() {
   adc_select_input(1);
   uint16_t x = adc_read();  // VRX
@@ -214,6 +198,7 @@ void move_led() {
   }
 }
 
+//Função chamada para repor o estoque (aumentar o brilho total do LED)
 void reposition(){
   //Chama quando o precisa repor um estoque
   ssd1306_fill(&ssd, false);
@@ -223,17 +208,18 @@ void reposition(){
   ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor); // Desenha um retângulo
   ssd1306_send_data(&ssd); // Envia os dados para o display
 
-  printf("=====================================\n");
-  printf("[240, 230, 220, 210, 200]\n[150, 160, 170, 180, 190]\n[140, 130, 120, 110, 100]\n[050, 060, 070, 080, 090]\n[040, 030, 020, 010, 000]\n");
-  printf("=====================================\n");
-  printf("Digite o número do deposito que você quer abastecer: \n");
+  printf("=========================\n");
+  printf("[240, 230, 220, 210, 200]\n[150, 160, 170, 180, 190]\n[140, 130,      110, 100]\n[050, 060, 070, 080, 090]\n[040, 030, 020, 010, 000]\n");
+  printf("=========================\n");
+  printf("Os códigos de cada deposito está na mesma posição que os LEDs\n");
+  printf("Digite o código do deposito que você quer abastecer: \n");
 
  
   char str[3];  // Tamanho 3 para armazenar 2 caracteres e o caractere nulo
   int i = 0;
   char ch;
 
-  while ((ch = getchar()) != '\n' && i < 2) {  // i < 2 para armazenar apenas 2 caracteres
+  while ((ch = getchar()) != '\n' && i < 2) { 
       str[i++] = ch;
   }
   str[i] = '\0';  // Adiciona o caractere nulo no final para terminar a string
@@ -267,42 +253,14 @@ void reposition(){
 //Inicializa os pinos
 void initialization(){
     //Joystick
-    stdio_init_all();
     adc_init();
     adc_gpio_init(26);
     adc_gpio_init(27);
 
-    //LED RGB
-    gpio_init(LED_r);
-    gpio_set_dir(LED_r, GPIO_OUT);
-    gpio_put(LED_r, 0);
-
-    gpio_init(LED_g);
-    gpio_set_dir(LED_g, GPIO_OUT);
-    gpio_put(LED_g, 0);
-    
-    gpio_init(LED_b);
-    gpio_set_dir(LED_b, GPIO_OUT);
-    gpio_put(LED_b, 0);
-
-    //Buzzers
-    gpio_init(buzzer_A);
-    gpio_set_dir(buzzer_A, GPIO_OUT);
-    gpio_put(buzzer_A, 0); 
-
-    gpio_init(buzzer_B);
-    gpio_set_dir(buzzer_B, GPIO_OUT);
-    gpio_put(buzzer_B, 0); 
-
-    //Botões
+    //Botão
     gpio_init(button_A);
     gpio_set_dir(button_A, GPIO_IN);
     gpio_pull_up(button_A);
-
-    gpio_init(button_B);
-    gpio_set_dir(button_B, GPIO_IN);
-    gpio_pull_up(button_B);
-
 
     i2c_init(I2C_PORT, 400 * 1000);
     gpio_set_function(I2C_SDA, GPIO_FUNC_I2C); // Set the GPIO pin function to I2C
@@ -321,8 +279,8 @@ void initialization(){
 
 int main(){
   stdio_init_all();
-  initialization();
-  srand(time(NULL));
+  initialization(); //Inicializa os pinos
+  srand(time(NULL)); //Função para chamar um numero aleatorio
 
   // Limpa o display. O display inicia com todos os pixels apagados.
   ssd1306_fill(&ssd, false);
@@ -332,7 +290,7 @@ int main(){
   ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor); // Desenha um retângulo
   ssd1306_send_data(&ssd); // Atualiza o display
 
-    
+  //Inicializa todos os os pinos da matriz (menos o 12) com o brilho maximo definido no projeto
   for (int j = 0; j <= 24; j++) { 
     if(j != 12){
       float i = 0.9;  
@@ -346,28 +304,25 @@ int main(){
   } 
 
 
-  //sleep_ms(5000);
+  //Funções de interrupção
   gpio_set_irq_enabled_with_callback(button_A, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
-  gpio_set_irq_enabled_with_callback(button_B, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
   add_repeating_timer_ms(1000, timer_callback, NULL, &timer);
 
   while (true) {
     
-
+    //Verdadeira quando estar em horario de expediente
     if (office_hours){
       move_led();
 
+      //Verdadeira quando o usuario quer fazer reposição no estoque
       if(get_reposition && stdio_usb_connected()){
         reposition();
       }
       get_reposition = false;
 
     }
-    
-    else if (not_office_hours){
-
-    }
-
+  
+    //Verdadeira quando a interrupção por timer é chamada (a cada 1 segundo)
     if (chamou) {
       //Controle de intensidade
     
@@ -381,14 +336,10 @@ int main(){
       int is_red = leds[random_number].R;
       int is_green = leds[random_number].G;
       
-      //printf("Numero escolhido: %d\n", random_number);
-      //printf("Itensidade do LED: %.2f\n", intensity);
       float new_intensity = intensity * 0.9;
-      printf("Nova intensidade: %.2f\n", new_intensity);
 
       if (random_number != 12){
         if(is_red > 0){
-          //printf("é vermelho: %d\n", is_red);
           sleep_ms(1000);
         }
   
@@ -405,20 +356,15 @@ int main(){
         ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor); // Desenha um retângulo
         ssd1306_draw_string(&ssd, "FACA REPOSICAO", 10, 50); // Desenha uma string
         ssd1306_send_data(&ssd); // Envia os dados para o display
-        //printf("Itensidade muito baixa, fica vermelho\n");
   
         } else if (is_green > 0){
           npSetLEDIntensity(random_number, 0, 255, 0, new_intensity);
-          //printf("Tirando 0.01 do LED: %d\n", random_number);  
         }
-        //printf("Saiu do callback\n");
-        printf("\n");
         npWrite();
 
       }
 
       chamou = false;
-
       
     }
     sleep_ms(200);
