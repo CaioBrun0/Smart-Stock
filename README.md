@@ -1,2 +1,2 @@
 # Smart-Stock
-Estoque inteligente trazendo inovação e segurança
+Estoque inteligente, trazendo inovação e praticidade para sua empresa.
